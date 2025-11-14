@@ -1,12 +1,20 @@
 /*
-    Script: Civiles Reactivos
-    Descripción: Los civiles se arman y atacan cuando son agredidos
-    Uso: Ejecutar en init.sqf o en el init de cada civil
+    Script: Civiles Reactivos (3 muertes)
+    Descripción: Los civiles se arman después de matar a 3 civiles
+    Uso: Ejecutar en init.sqf
 */
+
+// Variable global para contar civiles muertos
+if (isNil "civilesKillCount") then {
+    civilesKillCount = 0;
+};
 
 // Función para armar civiles
 fn_armarCivil = {
     params ["_civil"];
+    
+    // Verificar que aún es civil
+    if (side _civil != civilian) exitWith {};
     
     // Array de armas disponibles para civiles
     _armasDisponibles = [
@@ -33,47 +41,41 @@ fn_armarCivil = {
     // Hacer que el civil sea agresivo
     _civil setBehaviour "COMBAT";
     _civil setCombatMode "RED";
+};
+
+// Función para armar a todos los civiles del mapa
+fn_armarTodosCiviles = {
+    {
+        if (side _x == civilian && alive _x) then {
+            [_x] call fn_armarCivil;
+        };
+    } forEach allUnits;
     
-    // Mensaje de sistema
-    systemChat format ["%1 se ha armado y es hostil!", name _civil];
+    // Mensajes de advertencia
+    titleText ["¡Has matado a 3 civiles! ¡Todos se están armando contra ti!", "PLAIN DOWN"];
+    systemChat "ADVERTENCIA: Los civiles se han vuelto hostiles";
+    playSound "alarm";
 };
 
 // Función principal para monitorear civiles
 fn_monitoreoCiviles = {
     params ["_civil"];
     
-    _civil addEventHandler ["Hit", {
-        params ["_unit", "_causante"];
-        
-        // Verificar que el causante es el jugador o su grupo
-        if (isPlayer _causante || {_causante in units group player}) then {
-            // Armar al civil
-            [_unit] call fn_armarCivil;
-            
-            // Buscar civiles cercanos y armarlos también
-            _civilesCercanos = nearestObjects [_unit, ["Civilian"], 50];
-            {
-                if (alive _x && _x != _unit && side _x == civilian) then {
-                    [_x] call fn_armarCivil;
-                };
-            } forEach _civilesCercanos;
-        };
-    }];
-    
     _civil addEventHandler ["Killed", {
         params ["_unit", "_asesino"];
         
-        // Si matan a un civil, armar a los cercanos
+        // Verificar que el asesino es el jugador o su grupo
         if (isPlayer _asesino || {_asesino in units group player}) then {
-            _civilesCercanos = nearestObjects [_unit, ["Civilian"], 100];
-            {
-                if (alive _x && side _x == civilian) then {
-                    [_x] call fn_armarCivil;
-                };
-            } forEach _civilesCercanos;
+            // Incrementar contador
+            civilesKillCount = civilesKillCount + 1;
             
-            // Mensaje de advertencia
-            titleText ["¡Los civiles se están armando contra ti!", "PLAIN DOWN"];
+            // Mensaje con el contador
+            systemChat format ["Civiles muertos: %1/3", civilesKillCount];
+            
+            // Si llegamos a 3, armar a todos los civiles
+            if (civilesKillCount >= 3) then {
+                [] call fn_armarTodosCiviles;
+            };
         };
     }];
 };
@@ -94,5 +96,4 @@ addMissionEventHandler ["EntityCreated", {
     };
 }];
 
-hint "Sistema de civiles reactivos activado";
-
+hint "Sistema de civiles reactivos activado\nLímite: 3 civiles muertos";
